@@ -7,8 +7,8 @@
   <meta name="description" content="웅촌중학교 2026학년도 학생평가 연구학교의 운영 보고서, 교실-삶 이음 평가 사례집, 활용 안내서, 이음 평가도구, 평가 프롬프트를 한곳에서 만나는 자료 모음입니다." />
   <title>이음(E:UM) | 학생평가 연구학교 성과 공유</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="style.css" />
-  <script src="app.js" defer></script>
+  <link rel="stylesheet" href="style.css?v=flipbook-20261110" />
+  <script src="app.js?v=flipbook-20261110" defer></script>
 </head>
 <body>
   <div class="site-shell">
@@ -142,20 +142,30 @@
         <div class="reader-actions"><a id="readerPdf" class="reader-link" href="#" target="_blank" rel="noopener">PDF로 보기 ↗</a><a id="readerDownload" class="reader-link reader-download" href="#" download>PDF 내려받기 ↓</a><button type="button" id="readerClose" class="reader-close" aria-label="전자책 닫기">×</button></div>
       </div>
       <div class="reader-body">
-        <aside class="reader-sidebar"><p class="reader-side-head">바로 찾아가기</p><div id="readerChapters" class="reader-chapters"></div><div class="reader-tip"><span aria-hidden="true">⌨</span><p>키보드 <b>← →</b> 키로 책장을 넘길 수 있습니다.</p></div></aside>
+        <aside class="reader-sidebar"><p class="reader-side-head">바로 찾아가기</p><div id="readerChapters" class="reader-chapters"></div><div class="reader-tip"><span aria-hidden="true">⌨</span><p>마우스·터치 또는 키보드 <b>← →</b> 키로 책장을 넘길 수 있습니다.</p></div></aside>
         <div class="reader-content">
           <div class="book-canvas">
-            <button id="pagePrevOverlay" class="book-side-arrow book-arrow-prev" type="button" aria-label="이전 페이지"><span aria-hidden="true">‹</span></button>
-            <div id="bookPage" class="book-page" aria-live="polite"><img id="readerImage" alt="책 페이지" draggable="false" /><div class="book-shadow"></div></div>
-            <button id="pageNextOverlay" class="book-side-arrow book-arrow-next" type="button" aria-label="다음 페이지"><span aria-hidden="true">›</span></button>
+            <button id="pagePrevOverlay" class="book-side-arrow book-arrow-prev" type="button" aria-label="이전 책장"><span aria-hidden="true">‹</span></button>
+            <div id="flipbook" class="flipbook" role="region" aria-label="종이책처럼 넘기는 전자책" tabindex="0">
+              <div class="flipbook-spread" id="flipbookSpread">
+                <div class="flip-page flip-page-left" id="readerLeftPage"><img id="readerLeftImage" alt="" draggable="false" /></div>
+                <div class="flip-page flip-page-right" id="readerRightPage"><img id="readerRightImage" alt="" draggable="false" /></div>
+                <div class="flipbook-spine" aria-hidden="true"></div>
+                <div class="flip-sheet" id="flipSheet" aria-hidden="true">
+                  <div class="flip-sheet-face flip-sheet-front"><img id="flipFrontImage" alt="" draggable="false" /></div>
+                  <div class="flip-sheet-face flip-sheet-back"><img id="flipBackImage" alt="" draggable="false" /></div>
+                </div>
+              </div>
+            </div>
+            <button id="pageNextOverlay" class="book-side-arrow book-arrow-next" type="button" aria-label="다음 책장"><span aria-hidden="true">›</span></button>
           </div>
           <div class="reader-controls">
             <button id="readerPrev" class="control-btn" type="button">← 이전</button>
-            <div class="page-location"><label for="readerPageInput">페이지</label><input id="readerPageInput" type="number" min="1" value="1" inputmode="numeric" /><span id="readerTotal">/ 1</span></div>
+            <div class="page-location"><label for="readerPageInput">페이지</label><input id="readerPageInput" type="number" min="1" value="1" inputmode="numeric" /><span id="readerTotal">/ 1</span><span id="readerSpreadLabel" class="reader-spread-label"></span></div>
             <button id="readerNext" class="control-btn control-primary" type="button">다음 →</button>
           </div>
           <div class="reader-progress" aria-hidden="true"><div id="readerProgressFill"></div></div>
-          <p class="reader-instruction">화면의 화살표를 누르거나 페이지 번호를 입력해 이동할 수 있습니다. 글자를 크게 보거나 검색하려면 ‘PDF로 보기’를 이용하세요.</p>
+          <p class="reader-instruction">책장을 클릭하거나 좌우로 밀어 넘길 수 있습니다. 목차와 페이지 번호로 바로 이동할 수 있으며, 검색·확대·인쇄는 ‘PDF로 보기’를 이용하세요.</p>
         </div>
       </div>
     </div>
