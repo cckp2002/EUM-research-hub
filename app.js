@@ -52,6 +52,12 @@ const pdfLink = document.querySelector('#readerPdf');
 const pdfDownload = document.querySelector('#readerDownload');
 const closeButton = document.querySelector('#readerClose');
 const book = document.querySelector('#flipbook');
+const bookViewport = document.querySelector('#bookViewport');
+const bookZoomStage = document.querySelector('#bookZoomStage');
+const zoomInButton = document.querySelector('#readerZoomIn');
+const zoomOutButton = document.querySelector('#readerZoomOut');
+const zoomResetButton = document.querySelector('#readerZoomReset');
+const zoomValue = document.querySelector('#readerZoomValue');
 const flipSheet = document.querySelector('#flipSheet');
 const leftPage = document.querySelector('#readerLeftPage');
 const rightPage = document.querySelector('#readerRightPage');
@@ -69,6 +75,99 @@ let lastFocus = null;
 let viewVersion = 0;
 let swipeStart = null;
 const preloaded = new Map();
+
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 0.25;
+let zoom = 1;
+let baseBookWidth = 0;
+let baseBookHeight = 0;
+let resizeRaf = 0;
+const pointers = new Map();
+let pinchState = null;
+let panState = null;
+let suppressSwipe = false;
+
+// Keep the book dimensions stable; grow the scrollable stage rather than scaling the whole dialog.
+// The same stage supports mouse drag, touch pan and focal-point-preserving pinch zoom.
+function zoomClamp(value) {
+  return Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value)) * 100) / 100;
+}
+
+function zoomButtonState() {
+  zoomValue.textContent = `${Math.round(zoom * 100)}%`;
+  zoomOutButton.disabled = zoom <= ZOOM_MIN;
+  zoomInButton.disabled = zoom >= ZOOM_MAX;
+  zoomResetButton.disabled = zoom === 1;
+  bookViewport.classList.toggle('is-zoomed', zoom > 1);
+}
+
+function centerBookViewport() {
+  bookViewport.scrollLeft = (bookViewport.scrollWidth - bookViewport.clientWidth) / 2;
+  bookViewport.scrollTop = (bookViewport.scrollHeight - bookViewport.clientHeight) / 2;
+}
+
+function setZoom(value, clientX = null, clientY = null) {
+  if (!dialog.open || !baseBookWidth || !baseBookHeight) return;
+  const nextZoom = zoomClamp(value);
+  if (nextZoom === zoom) return;
+
+  // Preserve the content point under the gesture midpoint or cursor.
+  const rect = bookViewport.getBoundingClientRect();
+  const localX = clientX === null ? bookViewport.clientWidth / 2 : clientX - rect.left;
+  const localY = clientY === null ? bookViewport.clientHeight / 2 : clientY - rect.top;
+  const oldMidX = bookZoomStage.offsetLeft + bookZoomStage.offsetWidth / 2;
+  const oldMidY = bookZoomStage.offsetTop + bookZoomStage.offsetHeight / 2;
+  const worldX = (bookViewport.scrollLeft + localX - oldMidX) / zoom;
+  const worldY = (bookViewport.scrollTop + localY - oldMidY) / zoom;
+  zoom = nextZoom;
+  layoutZoomStage();
+  const newMidX = bookZoomStage.offsetLeft + bookZoomStage.offsetWidth / 2;
+  const newMidY = bookZoomStage.offsetTop + bookZoomStage.offsetHeight / 2;
+  bookViewport.scrollLeft = newMidX + worldX * zoom - localX;
+  bookViewport.scrollTop = newMidY + worldY * zoom - localY;
+}
+
+function layoutZoomStage() {
+  if (!baseBookWidth || !baseBookHeight) return;
+  const availableWidth = bookViewport.clientWidth - (mobileQuery.matches ? 14 : 28);
+  const availableHeight = bookViewport.clientHeight;
+  const width = Math.max(availableWidth, baseBookWidth * zoom + 28);
+  const height = Math.max(availableHeight, baseBookHeight * zoom + 28);
+  bookZoomStage.style.width = `${Math.ceil(width)}px`;
+  bookZoomStage.style.height = `${Math.ceil(height)}px`;
+  book.style.width = `${baseBookWidth}px`;
+  book.style.height = `${baseBookHeight}px`;
+  book.style.maxHeight = 'none';
+  book.style.transform = `scale(${zoom})`;
+  zoomButtonState();
+}
+
+function measureAndLayoutZoom() {
+  if (!dialog.open || !currentDocId) return;
+  const retainedZoom = zoom;
+  book.style.width = '';
+  book.style.height = '';
+  book.style.maxHeight = '';
+  book.style.transform = '';
+  bookZoomStage.style.width = '';
+  bookZoomStage.style.height = '';
+  // Account for the new zoom toolbar; the book must fit inside its canvas at 100%.
+  const naturalWidth = book.offsetWidth;
+  const naturalRatio = mobileQuery.matches ? 595 / 841 : 1190 / 841;
+  baseBookWidth = Math.floor(Math.min(
+    naturalWidth,
+    bookViewport.clientWidth - 30,
+    (bookViewport.clientHeight - 18) * naturalRatio
+  ));
+  baseBookWidth = Math.max(40, baseBookWidth);
+  baseBookHeight = baseBookWidth / naturalRatio;
+  zoom = retainedZoom;
+  layoutZoomStage();
+  centerBookViewport();
+}
+
+function resetZoom() { setZoom(1); centerBookViewport(); }
 
 function pageSrc(docId, page) {
   if (!docId || !Number.isInteger(page) || page < 1 || page > LIBRARY[docId].pages) return null;
@@ -254,6 +353,7 @@ async function animateStep(direction) {
   endFlip();
   turning = false;
   commitPage(target);
+  if (zoom > 1) centerBookViewport();
 }
 
 function jumpTo(page) {
@@ -262,6 +362,7 @@ function jumpTo(page) {
   endFlip();
   turning = false;
   commitPage(page);
+  if (zoom > 1) centerBookViewport();
 }
 
 function populateChapters(doc) {
@@ -296,6 +397,9 @@ function openBook(docId, page = 1) {
   commitPage(page);
   if (!dialog.open) dialog.showModal();
   document.body.style.overflow = 'hidden';
+  zoom = 1;
+  // Wait for the opened dialog to have its final dimensions before measuring the book.
+  requestAnimationFrame(() => { if (dialog.open && currentDocId === docId) measureAndLayoutZoom(); });
   closeButton.focus();
 }
 
@@ -309,6 +413,21 @@ prevButton.addEventListener('click', () => void animateStep(-1));
 nextButton.addEventListener('click', () => void animateStep(1));
 prevOverlay.addEventListener('click', () => void animateStep(-1));
 nextOverlay.addEventListener('click', () => void animateStep(1));
+zoomInButton.addEventListener('click', () => setZoom(zoom + ZOOM_STEP));
+zoomOutButton.addEventListener('click', () => setZoom(zoom - ZOOM_STEP));
+zoomResetButton.addEventListener('click', resetZoom);
+bookViewport.addEventListener('dblclick', (event) => {
+  if (turning || !currentDocId) return;
+  if (zoom <= 1) setZoom(2, event.clientX, event.clientY);
+  else resetZoom();
+});
+// Wheel zoom only with Ctrl/Cmd and only inside the book; ordinary scrolling remains available.
+bookViewport.addEventListener('wheel', (event) => {
+  if (!dialog.open || !event.ctrlKey && !event.metaKey) return;
+  event.preventDefault();
+  setZoom(zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP), event.clientX, event.clientY);
+}, { passive: false });
+
 pageInput.addEventListener('change', () => jumpTo(pageInput.value));
 pageInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
@@ -320,17 +439,39 @@ pageInput.addEventListener('keydown', (event) => {
 
 document.addEventListener('keydown', (event) => {
   if (!dialog.open || !currentDocId) return;
-  if (event.target instanceof HTMLInputElement) return;
-  if (event.key === 'ArrowRight') { event.preventDefault(); void animateStep(1); }
-  if (event.key === 'ArrowLeft') { event.preventDefault(); void animateStep(-1); }
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+  if (event.altKey) return;
+  // +, -, 0 (also Ctrl/Cmd combinations) operate on the e-book, not browser zoom.
+  if (event.key === '+' || event.key === '=' || event.key === 'Add') {
+    event.preventDefault(); setZoom(zoom + ZOOM_STEP); return;
+  }
+  if (event.key === '-' || event.key === '_' || event.key === 'Subtract') {
+    event.preventDefault(); setZoom(zoom - ZOOM_STEP); return;
+  }
+  if (event.key === '0' || event.key === 'Numpad0') {
+    event.preventDefault(); resetZoom(); return;
+  }
+  // Arrow keys pan while magnified; navigation buttons remain available for page changes.
+  if (zoom > 1) {
+    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      event.preventDefault(); bookViewport.scrollLeft += event.key === 'ArrowRight' ? 160 : -160; return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault(); bookViewport.scrollTop += event.key === 'ArrowDown' ? 160 : -160; return;
+    }
+  } else {
+    if (event.key === 'ArrowRight') { event.preventDefault(); void animateStep(1); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); void animateStep(-1); }
+  }
 });
 
 // Horizontal drag and swipe to turn a sheet; natural page scrolling remains available.
 book.addEventListener('pointerdown', (event) => {
-  if (!currentDocId || turning || event.button !== 0) return;
+  if (!currentDocId || turning || event.button !== 0 || zoom > 1 || pointers.size > 0) return;
   swipeStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
 });
 book.addEventListener('pointerup', (event) => {
+  if (zoom > 1 || suppressSwipe || pointers.size > 1) { swipeStart = null; return; }
   if (!swipeStart || swipeStart.pointerId !== event.pointerId) return;
   const dx = event.clientX - swipeStart.x;
   const dy = event.clientY - swipeStart.y;
@@ -341,14 +482,89 @@ book.addEventListener('pointerup', (event) => {
 });
 book.addEventListener('pointercancel', () => { swipeStart = null; });
 
+// Two-finger pinch on touchscreens. A single pointer pans when magnified.
+bookViewport.addEventListener('pointerdown', (event) => {
+  if (!dialog.open || turning || !currentDocId || event.button !== 0) return;
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (pointers.size >= 2) {
+    const [a, b] = [...pointers.values()].slice(0, 2);
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    pinchState = { dist: Math.max(1, dist), scale: zoom };
+    panState = null;
+    suppressSwipe = true;
+    swipeStart = null;
+  } else if (zoom > 1) {
+    panState = { id: event.pointerId, x: event.clientX, y: event.clientY,
+      scrollLeft: bookViewport.scrollLeft, scrollTop: bookViewport.scrollTop };
+    if (bookViewport.setPointerCapture) {
+      try { bookViewport.setPointerCapture(event.pointerId); } catch { /* Pointer no longer active. */ }
+    }
+  }
+});
+bookViewport.addEventListener('pointermove', (event) => {
+  if (!pointers.has(event.pointerId)) return;
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (pointers.size >= 2 && pinchState) {
+    event.preventDefault();
+    const [a, b] = [...pointers.values()].slice(0, 2);
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    const midX = (a.x + b.x) / 2;
+    const midY = (a.y + b.y) / 2;
+    setZoom(pinchState.scale * dist / pinchState.dist, midX, midY);
+  } else if (zoom > 1 && panState && panState.id === event.pointerId && !pinchState) {
+    event.preventDefault();
+    bookViewport.scrollLeft = panState.scrollLeft - (event.clientX - panState.x);
+    bookViewport.scrollTop = panState.scrollTop - (event.clientY - panState.y);
+  }
+});
+function releaseReaderPointer(event) {
+  pointers.delete(event.pointerId);
+  if (pointers.size < 2) pinchState = null;
+  if (pointers.size === 0) { panState = null; suppressSwipe = false; swipeStart = null; }
+  if (panState?.id === event.pointerId) panState = null;
+}
+bookViewport.addEventListener('pointerup', releaseReaderPointer);
+bookViewport.addEventListener('pointercancel', releaseReaderPointer);
+bookViewport.addEventListener('lostpointercapture', releaseReaderPointer);
+// A drag can finish over the sidebar or outside the reader surface.
+// Clear its state after the normal book/viewport handlers have received the release.
+window.addEventListener('pointerup', releaseReaderPointer);
+window.addEventListener('pointercancel', releaseReaderPointer);
+window.addEventListener('blur', () => {
+  pointers.clear();
+  pinchState = null;
+  panState = null;
+  suppressSwipe = false;
+  swipeStart = null;
+});
+
 mobileQuery.addEventListener('change', () => {
-  if (dialog.open && currentDocId) jumpTo(currentPage);
+  if (dialog.open && currentDocId) {
+    jumpTo(currentPage);
+    requestAnimationFrame(measureAndLayoutZoom);
+  }
+});
+window.addEventListener('resize', () => {
+  if (!dialog.open || !currentDocId) return;
+  cancelAnimationFrame(resizeRaf);
+  resizeRaf = requestAnimationFrame(measureAndLayoutZoom);
 });
 dialog.addEventListener('close', () => {
   ++viewVersion;
   endFlip();
   turning = false;
   swipeStart = null;
+  pointers.clear();
+  pinchState = null;
+  panState = null;
+  suppressSwipe = false;
+  zoom = 1;
+  baseBookWidth = 0;
+  baseBookHeight = 0;
+  cancelAnimationFrame(resizeRaf);
+  book.style.transform = book.style.width = book.style.height = book.style.maxHeight = '';
+  bookZoomStage.style.width = bookZoomStage.style.height = '';
+  zoomButtonState();
   currentDocId = null;
   document.body.style.overflow = '';
   if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();

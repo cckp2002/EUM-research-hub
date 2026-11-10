@@ -108,3 +108,67 @@
 @media(prefers-reduced-motion:reduce){
   .flip-sheet.is-flipping.turn-next,.flip-sheet.is-flipping.turn-prev{animation:none}
 }
+
+/* E:UM hub: viewer-only zoom. The dashboard and 3D sheet-turn styles above remain intact. */
+.book-viewport{
+  position:absolute;inset:0;box-sizing:border-box;
+  overflow:hidden;padding:0 14px;
+  scrollbar-width:thin;scrollbar-color:#90b8aa transparent;
+  /* Keep pinch gestures in the reader even when they begin at 100%. */
+  overscroll-behavior:contain;touch-action:none;
+}
+.book-zoom-stage{
+  position:relative;display:flex;justify-content:center;align-items:center;
+  box-sizing:border-box;flex:none;min-width:100%;min-height:100%;width:100%;height:100%;
+}
+.book-zoom-stage .flipbook{
+  flex:none;transform-origin:center center;
+  transition:transform .14s ease-out;
+}
+.book-viewport.is-zoomed{overflow:auto;touch-action:none;cursor:grab;}
+.book-viewport.is-zoomed:active{cursor:grabbing;}
+.book-viewport.is-zoomed .flipbook{touch-action:none;}
+.book-viewport.is-zoomed .book-zoom-stage{cursor:inherit;}
+.reader-zoom-toolbar{
+  width:100%;display:flex;align-items:center;justify-content:center;
+  gap:8px;flex:none;padding:10px 0 0;
+}
+.zoom-control{
+  height:36px;min-width:38px;border-radius:9px;
+  padding:0 10px;border:1px solid #bfd7cb;background:#fff;
+  color:#146e5c;font-size:21px;line-height:1;font-weight:800;
+  display:inline-flex;justify-content:center;align-items:center;
+  box-shadow:0 1px 3px rgba(10,56,42,.06);
+}
+.zoom-control:not(:disabled):hover{background:#e4f4eb;border-color:#73b89c}
+.zoom-control:focus-visible{outline:3px solid #f1a33d;outline-offset:2px}
+.zoom-control:disabled{opacity:.35;cursor:not-allowed}
+.zoom-control.zoom-fit{font-size:12px;min-width:90px;font-weight:800}
+.zoom-level{min-width:60px;text-align:center;font-size:14px;color:#165e52;font-weight:900;font-variant-numeric:tabular-nums}
+.reader-controls{padding-top:8px}
+.reader-progress{margin-top:11px}
+@media(max-width:800px){
+  .reader-zoom-toolbar{padding-top:7px;gap:7px}
+  .zoom-control{height:35px;min-width:37px}
+  .zoom-control.zoom-fit{min-width:79px;font-size:11px}
+  .book-viewport{padding:0 7px}
+  .book-viewport.is-zoomed{touch-action:none}
+}
+@media(max-width:560px){
+  .reader-zoom-toolbar{gap:5px;padding-top:4px}
+  .reader-controls{padding-top:5px}
+  .reader-progress{margin-top:7px}
+  .zoom-control{height:32px;min-width:34px}
+  .zoom-level{min-width:54px;font-size:12px}
+  .zoom-control.zoom-fit{min-width:72px}
+}
+@media(prefers-reduced-motion:reduce){.book-zoom-stage .flipbook{transition:none}}
+/* Mobile reader: avoid a tall empty grid row above the actual reading surface. */
+@media(max-width:800px){
+  .reader-body{grid-template-rows:auto minmax(0,1fr)}
+  .reader-content{min-height:0}
+  .flipbook{width:min(calc(100% - 55px),calc((100dvh - 230px)*.707))}
+}
+@media(max-width:560px){
+  .flipbook{width:min(calc(100% - 48px),calc((100dvh - 205px)*.707))}
+}
